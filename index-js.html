@@ -1,0 +1,490 @@
+<script>
+  /* Helper Functions */
+
+  // Convert number to currency string
+  const toDollars = (price) => {
+    const dollar = Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    });
+
+    return dollar.format(price);
+  };
+
+  // Get current date and time
+  const getTimestamp = () => {
+    const timsestamp = new Date().toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
+    const time = timsestamp.slice(12, timsestamp.length);
+    let date = timsestamp.slice(0, 10);
+
+    date = date.split('/');
+    [date[0], date[2]] = [date[2], date[0]];
+    [date[1], date[2]] = [date[2], date[1]];
+    date = date.join('/');
+
+    return(`${date}, ${time}`);
+  };
+
+
+  /* Modules */
+
+  const Items = (() => {
+    let items = undefined;
+
+    const getItems = () => items;
+
+    const setItems = (newItems) => {
+      items = newItems;
+    };
+
+    const getItem = (sku) => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].sku === sku) return items[i];
+      }
+
+      return undefined;
+    };
+
+    return { getItems, setItems, getItem };
+  })();
+
+  const Order = (() => {
+    const items = [];
+
+    const getItems = () => items;
+
+    const isEmpty = () => items.length === 0;
+
+    const containsItem = (sku) => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].item.sku === sku) {
+            return true;
+        }
+      }
+
+      return false;
+    };
+
+    const getItemIndex = (sku) => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].item.sku === sku) {
+          return i;
+        }
+      }
+
+      return undefined;
+    };
+
+    const addItem = (sku) => {
+      if (containsItem(sku)) {
+        items[getItemIndex(sku)].quantity++;
+      } else {
+        const item = Items.getItem(sku);
+
+        if (item !== undefined) {
+          items.push({
+              item: item,
+              quantity: 1,
+          });
+        }
+      }
+    };
+
+    const updateItemQuantity = (sku, newQuantity) => {
+      if (containsItem(sku) && newQuantity > 0) {
+        items[getItemIndex(sku)].quantity = newQuantity;
+      } else {
+        items[getItemIndex(sku)].quantity = 1;
+      }
+    };
+
+    const removeItem = (sku) => {
+      if (containsItem(sku)) {
+        items.splice(getItemIndex(sku), 1);
+      }
+    };
+
+    const getTotalCost = () => {
+      let total = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        total += items[i].item.price * items[i].quantity;
+      }
+
+      return total;
+    };
+
+    const clear = () => {
+      items.length = 0;
+    };
+
+    return {
+      getItems,
+      isEmpty,
+      addItem,
+      updateItemQuantity,
+      removeItem,
+      getTotalCost,
+      clear
+    };
+  })();
+
+  const Salespeople = (() => {
+    let salespeople = undefined;
+    let salesperson = undefined;
+
+    const getSalespeople = () => salespeople;
+
+    const setSalespeople = (newSalespeople) => {
+      salespeople = newSalespeople;
+    };
+
+    const getSalesperson = () => salesperson;
+
+    const setSalesperson = (id) => {
+      for (let i = 0; i < salespeople.length; i++) {
+        if (salespeople[i].id === id) {
+          salesperson = salespeople[i];
+        }
+      }
+    };
+
+    const increaseSalespersonInvoiceNumber = () => {
+      const INVOICE_NUMBER_LENGTH = 6;
+
+      // Increase salesperson invoice number by one
+      let invoiceNumber = salesperson.invoiceNumber;
+      invoiceNumber = String(Number(invoiceNumber) + 1).padStart(INVOICE_NUMBER_LENGTH, '0');
+      salesperson.invoiceNumber = invoiceNumber;
+
+      // Update salesperson invoice number on worksheet
+      google.script.run.updateSalespersonInvoiceNumber(salesperson.id, invoiceNumber);
+    };
+
+    return {
+      getSalespeople,
+      setSalespeople,
+      getSalesperson,
+      setSalesperson,
+      increaseSalespersonInvoiceNumber
+    };
+  })();
+
+  const Customer = (() => {
+    const REQUIRED = true; // If customer info is required to post invoice
+    let name = undefined;
+    let id = undefined;
+    let bankNumber = undefined;
+
+    const isRequired = () => REQUIRED;
+
+    const getName = () => name ? name : 'N/A';
+
+    const setName = (newName) => {
+      name = newName ? newName : undefined;
+    };
+
+    const getId = () => id ? id : 'N/A';
+
+    const setId = (newId) => {
+      id = newId ? newId : undefined;
+    };
+
+    const getBankNumber = () => bankNumber ? bankNumber : 'N/A';
+
+    const setBankNumber = (newBankNumber) => {
+      bankNumber = newBankNumber ? newBankNumber : undefined;
+    };
+
+    const isComplete = () => (
+      name !== undefined &&
+      id !== undefined &&
+      bankNumber !== undefined
+    );
+
+    const clear = () => {
+      name = undefined;
+      id = undefined;
+      bankNumber = undefined;
+    };
+
+    return {
+      isRequired,
+      getName,
+      setName,
+      getId,
+      setId,
+      getBankNumber,
+      setBankNumber,
+      isComplete,
+      clear
+    };
+  })();
+
+  const UI = (() => {
+    const displayItems = () => {
+      const itemsContainer = document.getElementById('items');
+      const items = Items.getItems();
+
+      for (let i = 0; i < items.length; i++) {
+        const item = document.createElement('div');
+
+        item.classList.add('item');
+        item.innerHTML = `
+          <img src=${items[i].imageURL} alt=${items[i].description}></img>
+          <div class="info">
+            <p>${items[i].description}</p>
+            <p>${toDollars(items[i].price)}</p>
+          </div>
+        `;
+
+        item.addEventListener('click', () => {
+          Order.addItem(items[i].sku);
+          displayOrder();
+        });
+
+        itemsContainer.appendChild(item);
+      }
+    };
+
+    const displayOrder = () => {
+      const itemsTable = document.querySelector('#invoice .order .items-table');
+      const order = Order.getItems();
+
+      itemsTable.innerHTML = '';
+
+      for (let i = 0; i < order.length; i++) {
+        const itemLine = document.createElement('tr');
+
+        const description = document.createElement('td');
+        description.textContent = order[i].item.description;
+
+        const quantity = document.createElement('td');
+        const quantityInput = document.createElement('input');
+
+        quantityInput.type = 'number';
+        quantityInput.min = 1;
+        quantityInput.value = order[i].quantity;
+
+        quantity.appendChild(quantityInput);
+
+        const price = document.createElement('td');
+        price.textContent = toDollars(order[i].item.price);
+
+        const subtotal = document.createElement('td');
+        subtotal.textContent = toDollars(order[i].item.price * order[i].quantity);
+
+        // Update prices when quantity input changes
+        quantityInput.addEventListener('change', () => {
+          Order.updateItemQuantity(order[i].item.sku, quantityInput.value);
+          quantityInput.value = order[i].quantity;
+          subtotal.textContent = toDollars(order[i].item.price * order[i].quantity);
+          displayTotalPrice();
+        });
+
+        const deleteItem = document.createElement('td');
+        const deleteItemBtn = document.createElement('button');
+
+        deleteItemBtn.type = 'button';
+        deleteItemBtn.classList.add('delete-item-btn');
+        deleteItemBtn.textContent = 'X';
+        deleteItemBtn.addEventListener('click', () => {
+          Order.removeItem(order[i].item.sku);
+          displayOrder();
+        });
+
+        deleteItem.appendChild(deleteItemBtn);
+
+        itemLine.appendChild(description);
+        itemLine.appendChild(quantity);
+        itemLine.appendChild(price);
+        itemLine.appendChild(subtotal);
+        itemLine.appendChild(deleteItem);
+
+        itemsTable.appendChild(itemLine);
+      }
+
+      displayTotalPrice();
+    };
+
+    const displayTotalPrice = () => {
+      document.querySelector('#total-price').textContent = toDollars(Order.getTotalCost());
+    };
+
+    const displaySalespeople = () => {
+      const select = document.getElementById('salespeople-select');
+      const salespeople = Salespeople.getSalespeople();
+
+      for (let i = 0; i < salespeople.length; i++) {
+        const option = document.createElement('option');
+
+        option.value = salespeople[i].id;
+        option.textContent = salespeople[i].name;
+
+        select.appendChild(option);
+      }
+    };
+
+    const displayInvoiceNumber = () => {
+      const salesperson = Salespeople.getSalesperson();
+      const invoiceNumber = `${salesperson.id}-${salesperson.invoiceNumber}`;
+      document.getElementById('invoice-number').textContent = invoiceNumber;
+    };
+
+    const resetCustomerInput = () => {
+      const customerInput = document.querySelectorAll('.cust-input');
+
+      customerInput.forEach((input) => {
+        input.value = '';
+      });
+    };
+
+    const displayMessage = (message) => {
+      const overlay = document.getElementById('overlay');
+      const messageModal = document.getElementById('message-modal');
+      const messageText = document.querySelector('#message-modal .message');
+
+      messageText.textContent = message;
+
+      overlay.classList.add('active');
+      messageModal.classList.add('active');
+    };
+
+    const hideMessage = () => {
+      const overlay = document.getElementById('overlay');
+      const messageModal = document.getElementById('message-modal');
+      
+      messageModal.classList.remove('active');
+      overlay.classList.remove('active');
+    };
+
+    return {
+      displayItems,
+      displayOrder,
+      displaySalespeople,
+      displayInvoiceNumber,
+      resetCustomerInput,
+      displayMessage,
+      hideMessage
+    };
+  })();
+
+  // Post invoice to worksheet
+  const postInvoice = () => {
+    let canPost = false;
+
+    if (!Order.isEmpty()) {
+      if (Customer.isRequired()) {
+        if (Customer.isComplete() && Salespeople.getSalesperson() !== undefined) {
+          canPost = true;
+        } else if (Salespeople.getSalesperson() === undefined) {
+          UI.displayMessage('No salesperson selected.');
+        } else {
+          UI.displayMessage('All customer fields must be filled out.');
+        }
+      } else if (Salespeople.getSalesperson() !== undefined) {
+        canPost = true;
+      }
+    } else {
+      UI.displayMessage('No items selected.');
+    }
+
+    if (canPost) {
+      const invoice = [];
+      const items = Order.getItems();
+      const date = getTimestamp();
+      const salesperson = Salespeople.getSalesperson();
+
+      for (let i = 0; i < items.length; i++) {
+        invoice.push([
+          date,
+          `${salesperson.id}-${salesperson.invoiceNumber}`,
+          salesperson.name,
+          Customer.getName(),
+          Customer.getId(),
+          Customer.getBankNumber(),
+          items[i].item.sku,
+          items[i].quantity,
+          toDollars(items[i].item.price * items[i].quantity)
+        ]);
+      }
+
+      // Post invoice data to worksheet
+      google.script.run.setInvoice(JSON.stringify(invoice));
+
+      Salespeople.increaseSalespersonInvoiceNumber();
+
+      Order.clear();
+      Customer.clear();
+
+      UI.displayOrder();
+      UI.displayInvoiceNumber();
+      UI.resetCustomerInput();
+    }
+  };
+
+
+  /* Event Listeners */
+
+  // Clear order
+  document.getElementById('clear-order-btn').addEventListener('click', () => {
+    Order.clear();
+    UI.displayOrder();
+  });
+
+  // Update salesperson
+  document.getElementById('salespeople-select').addEventListener('change', (e) => {
+    Salespeople.setSalesperson(e.target.value);
+    UI.displayInvoiceNumber();
+  });
+
+  // Update customer name
+  document.getElementById('cust-name-input').addEventListener('change', (e) => {
+    Customer.setName(e.target.value);
+  });
+
+  // Update customer ID
+  document.getElementById('cust-id-input').addEventListener('change', (e) => {
+    Customer.setId(e.target.value);
+  });
+
+  // Update customer bank number
+  document.getElementById('cust-bank-number-input').addEventListener('change', (e) => {
+    Customer.setBankNumber(e.target.value);
+  });
+
+  // Post invoice
+  document.getElementById('post-invoice-btn').addEventListener('click', () => {
+    postInvoice();
+  });
+
+  // Close message modal
+  document.getElementById('okay-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    UI.hideMessage();
+  });
+
+
+  /* Retreive Data From Spreadsheet */
+
+  // Retreive item data from worksheet
+  google.script.run.withSuccessHandler((data) => {
+    Items.setItems(JSON.parse(data));
+    UI.displayItems();
+  }).getItems();
+
+  // Retreive salespeople data from worksheet
+  google.script.run.withSuccessHandler((data) => {
+    Salespeople.setSalespeople(JSON.parse(data));
+    UI.displaySalespeople();
+  }).getSalespeople();
+</script>
