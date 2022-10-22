@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point Of Sale</title>
+    <?!= include("index-css"); ?>
+  </head>
+  <body>
+    <header>
+      <h1>Point Of Sale</h1>
+    </header>
+    <main>
+        <section id="invoice">
+          <div class="order">
+            <div class="header-container">
+              <table class="header-table">
+                <tr>
+                  <th>Item</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Subtotal</th>
+                  <th>Delete</th>
+                </tr>
+              </table>
+            </div>
+            <div class="items-container">
+              <table class="items-table"></table>
+            </div>
+            <div class="footer-container">
+              <button type="button" id="clear-order-btn">Clear</button>
+              <h2>
+                Total: 
+                <span id="total-price">$0.00</span>
+              </h2>
+            </div>
+          </div>
+          <div class="post">
+            <form action="#" id="post-invoice-form">
+              <div>
+                <select id="salespeople-select">
+                  <option value="" disabled selected>Salesperson</option>
+                </select>
+                <h3>
+                  Invoice #: 
+                  <span id="invoice-number">xx-xxxxxx</span>
+                </h3>
+              </div>
+              <input class="cust-input" id="cust-name-input" type="text" placeholder="Customer Name"></input>
+              <input class="cust-input" id="cust-id-input" type="number" placeholder="Customer ID"></input>
+              <input class="cust-input" id="cust-bank-number-input" type="number" placeholder="Customer Bank Number"></input>
+              <button type="button" id="post-invoice-btn">Post Invoice</button>
+            </form>
+          </div>
+        </section>
+        <section id="items"></section>
+    </main>
+    <div id="overlay"></div>
+    <div id="message-modal">
+      <form action="#">
+        <h3 class="message"></h3>
+        <button type="submit" id="okay-btn">Okay</button>
+      </form>
+    </div>
+    <?!= include('index-js') ?>
+  </body>
+</html>
